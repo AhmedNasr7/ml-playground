@@ -1,0 +1,6 @@
+torch
+chess
+jupyter
+tensorboard
+loguru
+scipy
