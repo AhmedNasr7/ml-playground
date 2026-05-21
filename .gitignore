@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+**/artifacts/logs/
+
+# TensorBoard
+**/artifacts/runs/
+
+# Model checkpoints & tokenizer artifacts
+**/artifacts/*.pt
+**/artifacts/*.pkl
+**/artifacts/*.bin
+**/artifacts/*.ckpt
+**/artifacts/*.safetensors
+
+# Data
+**/data/
+
+# Environments
+.env
+.venv/
+venv/
+env/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
