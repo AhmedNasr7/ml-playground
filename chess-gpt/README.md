@@ -139,17 +139,18 @@ san = minimax_move(board, engine, k=5, depth=2)
 | depth | k | Forward passes | Latency (GPU) |
 |-------|---|----------------|---------------|
 | 1     | 5 | 5              | ~instant      |
-| **2** | **5** | **25**     | **~0.1 s** ← default |
-| 3     | 5 | 125            | ~0.5 s        |
+| 2     | 5 | 25             | ~0.1 s        |
+| **3** | **5** | **125**    | **~0.5 s** ← default |
 | 4     | 5 | 625            | ~2–3 s        |
 
 Alpha-beta pruning cuts many branches early, so real pass counts are lower than worst-case.
 
-### Why depth 2 with k = 5?
+### Why depth 3 with k = 5?
 
-- **k = 5** covers ~53% of human moves (matches the model's top-5 accuracy) — going higher gives diminishing returns
-- **depth = 2** is the minimum meaningful search: you see the opponent's reply
+- **k = 5** covers ~56% of human moves (matches the model's top-5 accuracy) — going higher gives diminishing returns
+- **depth = 3** looks two moves ahead for each side: your move → opponent reply → your follow-up
 - The GPT's top-5 candidates are already policy-filtered, so the search explores *reasonable* lines rather than random legal moves
+- Three search modes available: sequential alpha-beta, threaded (root parallelism), and batched GPU inference (recommended)
 
 ### Relationship to AlphaZero
 
@@ -230,7 +231,7 @@ Verdict (backbone only) : well-matched  (ratio=0.85×)
 
 | Setting          | Value      |
 |------------------|------------|
-| Epochs           | 50         |
+| Epochs           | **150** (50 original + 100 continuation) |
 | Batch size       | 512        |
 | Learning rate    | 3e-4       |
 | LR schedule      | Linear warmup (200 steps) → constant |
@@ -244,26 +245,38 @@ Verdict (backbone only) : well-matched  (ratio=0.85×)
 
 ![Training Curves](assets/training_curves.png)
 
-Validation metrics over 50 epochs:
+Validation metrics over 150 epochs (dotted line marks start of continuation run at epoch 51):
 
 | Epoch | Val Loss | Val PPL | Top-1 Acc | Top-5 Acc |
 |------:|:--------:|:-------:|:---------:|:---------:|
-|  1    | 6.105    | 448.1   |  7.6%     | 17.0%     |
-|  5    | 5.110    | 165.7   | 14.2%     | 30.2%     |
-| 10    | 4.571    |  96.7   | 18.3%     | 38.1%     |
-| 20    | 4.025    |  55.9   | 22.4%     | 45.4%     |
-| 30    | 3.737    |  42.0   | 24.6%     | 49.5%     |
-| 40    | 3.575    |  35.7   | 25.9%     | 51.7%     |
-| **50**| **3.466**| **32.0**| **26.7%** | **53.1%** |
+|   1   | 6.105    | 448.1   |  7.6%     | 17.0%     |
+|  10   | 4.571    |  96.7   | 18.3%     | 38.1%     |
+|  20   | 4.025    |  55.9   | 22.4%     | 45.4%     |
+|  30   | 3.737    |  42.0   | 24.6%     | 49.5%     |
+|  40   | 3.575    |  35.7   | 25.9%     | 51.7%     |
+|  50   | 3.466    |  32.0   | 26.7%     | 53.1%     |
+|  60 ★ | 3.417   |  30.5   | 27.2%     | 53.8%     |
+|  70   | 3.383    |  29.5   | 27.4%     | 54.3%     |
+|  80   | 3.358    |  28.7   | 27.6%     | 54.7%     |
+|  90   | 3.333    |  28.0   | 27.8%     | 55.0%     |
+| 100   | 3.314    |  27.5   | 28.0%     | 55.3%     |
+| 110   | 3.295    |  27.0   | 28.1%     | 55.6%     |
+| 120   | 3.277    |  26.5   | 28.3%     | 55.9%     |
+| 130   | 3.264    |  26.2   | 28.4%     | 56.0%     |
+| 140   | 3.250    |  25.8   | 28.5%     | 56.3%     |
+| **150** | **3.237** | **25.5** | **28.6%** | **56.4%** |
 
-> **Best checkpoint:** `artifacts/chessgpt_tiny_300k_best.pt` (epoch 50, val_loss = 3.4660)
+★ continuation run starts
 
-The model converged steadily across all 50 epochs with no sign of overfitting — val loss improved every single epoch.
+> **Best checkpoint:** `artifacts/chessgpt_tiny_300k_best.pt` (epoch 150, val_loss = 3.2368)
+
+The model converged steadily across all 150 epochs with no sign of overfitting — val loss improved every single epoch across both runs.
 
 **Key takeaways:**
-- **Top-1 accuracy of 26.7%** means the model's single best-guess move matches a human/engine move more than 1-in-4 times
-- **Top-5 accuracy of 53.1%** means the correct move is in the model's top-5 predictions over half the time
-- Starting from random (epoch 1: top-1 = 7.6%), the model improved by **3.5× in top-1** and **3.1× in top-5** over training
+- **Top-1 accuracy of 28.6%** means the model's single best-guess move matches a human/engine move more than 1-in-4 times
+- **Top-5 accuracy of 56.4%** means the correct move is in the model's top-5 predictions over half the time
+- Starting from random (epoch 1: top-1 = 7.6%), the model improved by **3.8× in top-1** and **3.3× in top-5** over training
+- Continuation training (epochs 51–150) pushed val loss from **3.466 → 3.237** and top-5 from **53.1% → 56.4%**
 
 ---
 
