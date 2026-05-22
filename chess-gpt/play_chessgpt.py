@@ -345,9 +345,18 @@ HTML = """<!DOCTYPE html>
       <label>Top-K <span class="slider-val" id="topk-val">5</span></label>
       <input type="range" id="topk" min="0" max="30" step="1" value="5">
       <br><br>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         <input type="checkbox" id="minimax-toggle" style="width:auto;accent-color:#a8d8ea;cursor:pointer">
-        <label for="minimax-toggle" style="margin:0;cursor:pointer;color:#a8d8ea">Minimax (depth 2, k=5)</label>
+        <label for="minimax-toggle" style="margin:0;cursor:pointer;color:#a8d8ea">Minimax search</label>
+      </div>
+      <div id="minimax-opts" style="display:none;background:#0f3460;border-radius:8px;padding:10px;margin-bottom:10px">
+        <label>Search Depth <span class="slider-val" id="mm-depth-val">2</span></label>
+        <input type="range" id="mm-depth" min="1" max="4" step="1" value="2">
+        <br><br>
+        <label>Candidates (k) <span class="slider-val" id="mm-k-val">5</span></label>
+        <input type="range" id="mm-k" min="1" max="10" step="1" value="5">
+        <br>
+        <div style="font-size:0.75rem;color:#888;margin-top:6px">~<span id="mm-cost">25</span> forward passes per move</div>
       </div>
       <button id="btn-new">⟳ New Game</button>
     </div>
@@ -383,9 +392,17 @@ var historyUci = [];
 var humanColor = 'white';
 var busy = false;
 
-function getTemp()     { return parseFloat($('#temp').val()); }
-function getTopK()     { return parseInt($('#topk').val()); }
-function getMinimax()  { return $('#minimax-toggle').is(':checked'); }
+function getTemp()      { return parseFloat($('#temp').val()); }
+function getTopK()      { return parseInt($('#topk').val()); }
+function getMinimax()   { return $('#minimax-toggle').is(':checked'); }
+function getMMDepth()   { return parseInt($('#mm-depth').val()); }
+function getMMK()       { return parseInt($('#mm-k').val()); }
+
+function updateMMCost() {
+  var k = getMMK(), d = getMMDepth();
+  var cost = Math.pow(k, d);
+  $('#mm-cost').text(cost);
+}
 
 function setStatus(msg, cls) {
   var el = $('#status');
@@ -510,8 +527,8 @@ function onDrop(source, target) {
       temperature: getTemp(),
       top_k: getTopK(),
       use_minimax: getMinimax(),
-      minimax_k: 5,
-      minimax_depth: 2
+      minimax_k: getMMK(),
+      minimax_depth: getMMDepth()
     }),
     success: function(res) {
       busy = false;
@@ -581,7 +598,7 @@ function newGame() {
     type: 'POST',
     url: '/api/new_game',
     contentType: 'application/json',
-    data: JSON.stringify({ human_color: humanColor, temperature: getTemp(), top_k: getTopK(), use_minimax: getMinimax(), minimax_k: 5, minimax_depth: 2 }),
+    data: JSON.stringify({ human_color: humanColor, temperature: getTemp(), top_k: getTopK(), use_minimax: getMinimax(), minimax_k: getMMK(), minimax_depth: getMMDepth() }),
     success: function(res) {
       busy = false;
       historyUci = res.history_uci;
@@ -616,6 +633,11 @@ $(document).ready(function() {
 
   $('#temp').on('input', function() { $('#temp-val').text($(this).val()); });
   $('#topk').on('input', function() { $('#topk-val').text($(this).val()); });
+  $('#minimax-toggle').on('change', function() {
+    $('#minimax-opts').toggle(this.checked);
+  });
+  $('#mm-depth').on('input', function() { $('#mm-depth-val').text($(this).val()); updateMMCost(); });
+  $('#mm-k').on('input', function() { $('#mm-k-val').text($(this).val()); updateMMCost(); });
   $('#btn-new').on('click', newGame);
 
   loadHistory();
