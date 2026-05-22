@@ -114,6 +114,57 @@ This guarantees **100% legal move generation** — the model cannot physically s
 
 ---
 
+## Minimax Search (`src/search.py`)
+
+Beyond greedy sampling, Chess-GPT optionally runs **minimax search** over GPT-generated candidate moves. This is togglable from the UI — no retraining required.
+
+### How it works
+
+1. **Policy:** the GPT model ranks all legal moves by raw logit and returns the top-K as candidates (deterministic, no sampling)
+2. **Search:** minimax with alpha-beta pruning expands the tree to a given depth, alternating between the model playing for both sides
+3. **Evaluation:** leaf nodes are scored by **material balance** (centipawns: pawn=100, knight=320, bishop=330, rook=500, queen=900)
+4. **Selection:** pick the root move whose worst-case opponent reply leaves the best material score
+
+```python
+# src/search.py — public entry point
+from src.search import minimax_move
+
+san = minimax_move(board, engine, k=5, depth=2)
+# → tries 5 of my moves × 5 opponent replies = 25 forward passes
+# → picks the move that survives the opponent's best counter most unscathed
+```
+
+### Complexity
+
+| depth | k | Forward passes | Latency (GPU) |
+|-------|---|----------------|---------------|
+| 1     | 5 | 5              | ~instant      |
+| **2** | **5** | **25**     | **~0.1 s** ← default |
+| 3     | 5 | 125            | ~0.5 s        |
+| 4     | 5 | 625            | ~2–3 s        |
+
+Alpha-beta pruning cuts many branches early, so real pass counts are lower than worst-case.
+
+### Why depth 2 with k = 5?
+
+- **k = 5** covers ~53% of human moves (matches the model's top-5 accuracy) — going higher gives diminishing returns
+- **depth = 2** is the minimum meaningful search: you see the opponent's reply
+- The GPT's top-5 candidates are already policy-filtered, so the search explores *reasonable* lines rather than random legal moves
+
+### Relationship to AlphaZero
+
+This is a lightweight version of the AlphaZero idea:
+
+| Component | AlphaZero | Chess-GPT minimax |
+|-----------|-----------|-------------------|
+| Policy    | Neural policy head (trained by self-play) | GPT top-K logits |
+| Value     | Neural value head (trained by self-play) | Material count heuristic |
+| Search    | MCTS | Minimax + alpha-beta |
+
+A natural next step would be adding a **value head** trained on game outcomes to replace the material heuristic.
+
+---
+
 ## Chinchilla Scaling Analysis
 
 The training script computes scaling law diagnostics at startup and logs them. The key insight is that the **token embedding dominates total parameters** (75%), while the transformer backbone is what actually matters for the Chinchilla ratio.

@@ -27,6 +27,7 @@ from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).parent))
 from src.inference import load_chessgpt, get_gpt_move, ChessGPTEngine
+from src.search   import minimax_move
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -118,6 +119,9 @@ class NewGameRequest(BaseModel):
     human_color: str = 'white'
     temperature: float = 0.8
     top_k: int = 10
+    use_minimax: bool = False
+    minimax_k: int = 5
+    minimax_depth: int = 2
 
 class MoveRequest(BaseModel):
     history_uci: List[str]
@@ -125,6 +129,9 @@ class MoveRequest(BaseModel):
     human_color: str = 'white'
     temperature: float = 0.8
     top_k: int = 10
+    use_minimax: bool = False
+    minimax_k: int = 5
+    minimax_depth: int = 2
 
 class SaveGameRequest(BaseModel):
     history_uci: List[str]
@@ -143,7 +150,7 @@ def api_new_game(req: NewGameRequest):
     gpt_uci     = None
 
     if req.human_color == 'black':
-        san     = _gpt_move(board, req.temperature, req.top_k)
+        san     = _gpt_move(board, req.temperature, req.top_k, req.use_minimax, req.minimax_k, req.minimax_depth)
         move    = board.parse_san(san)
         gpt_uci = move.uci()
         gpt_san = san
@@ -199,7 +206,7 @@ def api_move(req: MoveRequest):
         }
 
     # GPT responds
-    gpt_san  = _gpt_move(board, req.temperature, req.top_k)
+    gpt_san  = _gpt_move(board, req.temperature, req.top_k, req.use_minimax, req.minimax_k, req.minimax_depth)
     gpt_move = board.parse_san(gpt_san)
     gpt_uci  = gpt_move.uci()
     board.push(gpt_move)
@@ -248,9 +255,20 @@ def api_history():
     return {'history': list(reversed(GAME_HISTORY))}
 
 
-def _gpt_move(board: chess.Board, temperature: float, top_k: int) -> str:
+def _gpt_move(
+    board: chess.Board,
+    temperature: float,
+    top_k: int,
+    use_minimax: bool = False,
+    minimax_k: int = 5,
+    minimax_depth: int = 2,
+) -> str:
     legal_sans = [board.san(m) for m in board.legal_moves]
-    san = get_gpt_move(board, engine, temperature=temperature, top_k=top_k)
+    if use_minimax:
+        logger.info(f'Minimax search  k={minimax_k}  depth={minimax_depth}')
+        san = minimax_move(board, engine, k=minimax_k, depth=minimax_depth)
+    else:
+        san = get_gpt_move(board, engine, temperature=temperature, top_k=top_k)
     if san not in legal_sans:
         import random
         san = board.san(random.choice(list(board.legal_moves)))
@@ -327,6 +345,10 @@ HTML = """<!DOCTYPE html>
       <label>Top-K <span class="slider-val" id="topk-val">5</span></label>
       <input type="range" id="topk" min="0" max="30" step="1" value="5">
       <br><br>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <input type="checkbox" id="minimax-toggle" style="width:auto;accent-color:#a8d8ea;cursor:pointer">
+        <label for="minimax-toggle" style="margin:0;cursor:pointer;color:#a8d8ea">Minimax (depth 2, k=5)</label>
+      </div>
       <button id="btn-new">⟳ New Game</button>
     </div>
     <div class="panel">
@@ -361,8 +383,9 @@ var historyUci = [];
 var humanColor = 'white';
 var busy = false;
 
-function getTemp()  { return parseFloat($('#temp').val()); }
-function getTopK()  { return parseInt($('#topk').val()); }
+function getTemp()     { return parseFloat($('#temp').val()); }
+function getTopK()     { return parseInt($('#topk').val()); }
+function getMinimax()  { return $('#minimax-toggle').is(':checked'); }
 
 function setStatus(msg, cls) {
   var el = $('#status');
@@ -485,7 +508,10 @@ function onDrop(source, target) {
       move_uci: moveUci,
       human_color: humanColor,
       temperature: getTemp(),
-      top_k: getTopK()
+      top_k: getTopK(),
+      use_minimax: getMinimax(),
+      minimax_k: 5,
+      minimax_depth: 2
     }),
     success: function(res) {
       busy = false;
@@ -555,7 +581,7 @@ function newGame() {
     type: 'POST',
     url: '/api/new_game',
     contentType: 'application/json',
-    data: JSON.stringify({ human_color: humanColor, temperature: getTemp(), top_k: getTopK() }),
+    data: JSON.stringify({ human_color: humanColor, temperature: getTemp(), top_k: getTopK(), use_minimax: getMinimax(), minimax_k: 5, minimax_depth: 2 }),
     success: function(res) {
       busy = false;
       historyUci = res.history_uci;

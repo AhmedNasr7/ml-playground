@@ -96,6 +96,11 @@ def parse_args() -> argparse.Namespace:
     tok.add_argument('--rebuild_tok', action='store_true',
                      help='Force rebuild tokenizer even if a cache exists')
 
+    # Resume
+    rg = p.add_argument_group('Resume')
+    rg.add_argument('--checkpoint', default=None,
+                    help='Path to a .pt checkpoint to resume weights from')
+
     # Output & logging
     og = p.add_argument_group('Output')
     og.add_argument('--run_name',   default=None,
@@ -405,6 +410,16 @@ def main() -> None:
     config.device = device
 
     model = GPT2(config).to(device)
+
+    if args.checkpoint:
+        ckpt_path = Path(args.checkpoint)
+        if not ckpt_path.exists():
+            logger.error(f'Checkpoint not found: {ckpt_path}')
+            sys.exit(1)
+        state = torch.load(ckpt_path, map_location=device)
+        model.load_state_dict(state)
+        logger.info(f'Resumed weights ← {ckpt_path}')
+
     print_scaling_report(model, config, len(train_ds.tokens), len(train_games))
 
     # ── Save config JSON so play_gpt.py can auto-load architecture ────────────
