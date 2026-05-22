@@ -19,12 +19,17 @@ build/
 # TensorBoard
 **/artifacts/runs/
 
-# Model checkpoints & tokenizer artifacts
+# Model checkpoints & tokenizer artifacts (ignored by default)
 **/artifacts/*.pt
 **/artifacts/*.pkl
 **/artifacts/*.bin
 **/artifacts/*.ckpt
 **/artifacts/*.safetensors
+
+# Allow specific trained checkpoints
+!chess-gpt/artifacts/chessgpt_tiny_300k_best.pt
+!chess-gpt/artifacts/chessgpt_tiny_300k_final.pt
+!chess-gpt/artifacts/move_tok.pkl
 
 # Data
 **/data/
