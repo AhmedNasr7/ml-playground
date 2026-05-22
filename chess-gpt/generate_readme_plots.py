@@ -1,6 +1,7 @@
 """
 Generate README plots for Chess-GPT:
-  1. Training curves (loss, perplexity, top-1, top-5) — from log file
+  1. Training curves (loss, perplexity, top-1, top-5) — from one or more log files
+     Multiple logs are concatenated with epoch offsets so the x-axis is continuous.
   2. Game length analysis — from notebook stats (no PGN reload needed)
 
 Output: assets/training_curves.png, assets/game_analysis.png
@@ -17,9 +18,7 @@ import numpy as np
 
 Path('assets').mkdir(exist_ok=True)
 
-# ── 1. Parse training log ─────────────────────────────────────────────────────
-
-LOG = Path('artifacts/logs/chessgpt_tiny_300k.log')
+# ── 1. Parse training logs (multiple runs concatenated) ───────────────────────
 
 EPOCH_RE = re.compile(
     r'Epoch\s+(\d+)\s+\|'
@@ -27,54 +26,68 @@ EPOCH_RE = re.compile(
     r'\s+\|\s+vl_loss=([\d.]+)\s+vl_ppl=([\d.]+)\s+vl_top1=([\d.]+)%\s+vl_top5=([\d.]+)%'
 )
 
-epochs, tr_loss, tr_top1 = [], [], []
-vl_loss, vl_ppl, vl_top1, vl_top5 = [], [], [], []
+# (log_path, epoch_offset, label)
+LOGS = [
+    ('artifacts/logs/chessgpt_tiny_300k.log',      0,  'Run 1 (epochs 1–50)'),
+    ('artifacts/logs/chessgpt_tiny_300k_cont.log', 50, 'Run 2 (epochs 51–150)'),
+]
 
-with open(LOG) as f:
-    for line in f:
-        m = EPOCH_RE.search(line)
-        if m:
-            ep = int(m.group(1))
-            # keep only latest value per epoch (log may have duplicates from restarts)
-            if ep in epochs:
-                idx = epochs.index(ep)
-                tr_loss[idx] = float(m.group(2))
-                tr_top1[idx] = float(m.group(4))
-                vl_loss[idx] = float(m.group(5))
-                vl_ppl[idx]  = float(m.group(6))
-                vl_top1[idx] = float(m.group(7))
-                vl_top5[idx] = float(m.group(8))
-            else:
-                epochs.append(ep)
-                tr_loss.append(float(m.group(2)))
-                tr_top1.append(float(m.group(4)))
-                vl_loss.append(float(m.group(5)))
-                vl_ppl.append(float(m.group(6)))
-                vl_top1.append(float(m.group(7)))
-                vl_top5.append(float(m.group(8)))
+def parse_log(path, offset):
+    ep_dict = {}   # ep_global → (tr_loss, tr_top1, vl_loss, vl_ppl, vl_top1, vl_top5)
+    with open(path) as f:
+        for line in f:
+            m = EPOCH_RE.search(line)
+            if m:
+                ep_global = int(m.group(1)) + offset
+                ep_dict[ep_global] = (
+                    float(m.group(2)), float(m.group(4)),
+                    float(m.group(5)), float(m.group(6)),
+                    float(m.group(7)), float(m.group(8)),
+                )
+    return ep_dict
 
-epochs  = np.array(epochs)
-tr_loss = np.array(tr_loss)
-tr_top1 = np.array(tr_top1)
-vl_loss = np.array(vl_loss)
-vl_ppl  = np.array(vl_ppl)
-vl_top1 = np.array(vl_top1)
-vl_top5 = np.array(vl_top5)
+combined = {}
+join_epochs = []
+for path, offset, label in LOGS:
+    chunk = parse_log(path, offset)
+    if offset > 0:
+        join_epochs.append(offset + 1)   # first epoch of this run on the global axis
+    combined.update(chunk)
+    print(f'  {label}: {len(chunk)} epochs parsed from {path}')
 
-print(f'Parsed {len(epochs)} epochs from log.')
+sorted_eps = sorted(combined)
+epochs  = np.array(sorted_eps)
+tr_loss = np.array([combined[e][0] for e in sorted_eps])
+tr_top1 = np.array([combined[e][1] for e in sorted_eps])
+vl_loss = np.array([combined[e][2] for e in sorted_eps])
+vl_ppl  = np.array([combined[e][3] for e in sorted_eps])
+vl_top1 = np.array([combined[e][4] for e in sorted_eps])
+vl_top5 = np.array([combined[e][5] for e in sorted_eps])
+
+print(f'Combined: {len(epochs)} epochs  ({epochs[0]}–{epochs[-1]})')
 
 # ── Plot 1: Training curves ───────────────────────────────────────────────────
 
 fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-fig.suptitle('Chess-GPT Training Curves  (tiny · 300K games · 50 epochs)',
-             fontsize=13, y=1.02)
+fig.suptitle(
+    f'Chess-GPT Training Curves  (tiny · 300K games · {epochs[-1]} epochs'
+    f'  [{" + ".join(str(j - (join_epochs[i-1] if i else 0)) for i, j in enumerate([*join_epochs, epochs[-1]+1]))} epochs per run])'
+    if join_epochs else
+    f'Chess-GPT Training Curves  (tiny · 300K games · {epochs[-1]} epochs)',
+    fontsize=12, y=1.02
+)
 
 BLUE, RED = '#3498db', '#e74c3c'
+
+def _add_join_vlines(ax):
+    for je in join_epochs:
+        ax.axvline(je, color='gray', ls=':', lw=1.2, alpha=0.6)
 
 # Loss
 ax = axes[0]
 ax.plot(epochs, tr_loss, color=BLUE, lw=1.8, label='Train')
 ax.plot(epochs, vl_loss, color=RED,  lw=1.8, label='Val')
+_add_join_vlines(ax)
 ax.set_xlabel('Epoch'); ax.set_ylabel('Cross-Entropy Loss')
 ax.set_title('Loss'); ax.legend(); ax.grid(alpha=0.3)
 ax.annotate(f'Best: {min(vl_loss):.4f}',
@@ -86,6 +99,7 @@ ax.annotate(f'Best: {min(vl_loss):.4f}',
 # Perplexity
 ax = axes[1]
 ax.plot(epochs, vl_ppl, color=RED, lw=1.8, label='Val PPL')
+_add_join_vlines(ax)
 ax.set_xlabel('Epoch'); ax.set_ylabel('Perplexity')
 ax.set_title('Validation Perplexity'); ax.legend(); ax.grid(alpha=0.3)
 ax.annotate(f'Final: {vl_ppl[-1]:.1f}',
@@ -95,9 +109,10 @@ ax.annotate(f'Final: {vl_ppl[-1]:.1f}',
 
 # Top-1 / Top-5 accuracy
 ax = axes[2]
-ax.plot(epochs, vl_top1, color=BLUE,    lw=1.8, label='Val Top-1')
+ax.plot(epochs, vl_top1, color=BLUE,      lw=1.8, label='Val Top-1')
 ax.plot(epochs, vl_top5, color='#2ecc71', lw=1.8, label='Val Top-5')
-ax.plot(epochs, tr_top1, color=BLUE,    lw=1, ls='--', alpha=0.5, label='Train Top-1')
+ax.plot(epochs, tr_top1, color=BLUE,      lw=1, ls='--', alpha=0.5, label='Train Top-1')
+_add_join_vlines(ax)
 ax.set_xlabel('Epoch'); ax.set_ylabel('Accuracy (%)')
 ax.set_title('Move Prediction Accuracy'); ax.legend(fontsize=8); ax.grid(alpha=0.3)
 ax.annotate(f'{vl_top1[-1]:.1f}%', xy=(epochs[-1], vl_top1[-1]),
