@@ -121,7 +121,7 @@ class NewGameRequest(BaseModel):
     top_k: int = 10
     use_minimax: bool = False
     minimax_k: int = 5
-    minimax_depth: int = 2
+    minimax_depth: int = 3
 
 class MoveRequest(BaseModel):
     history_uci: List[str]
@@ -131,7 +131,7 @@ class MoveRequest(BaseModel):
     top_k: int = 10
     use_minimax: bool = False
     minimax_k: int = 5
-    minimax_depth: int = 2
+    minimax_depth: int = 3
 
 class SaveGameRequest(BaseModel):
     history_uci: List[str]
@@ -350,13 +350,13 @@ HTML = """<!DOCTYPE html>
         <label for="minimax-toggle" style="margin:0;cursor:pointer;color:#a8d8ea">Minimax search</label>
       </div>
       <div id="minimax-opts" style="display:none;background:#0f3460;border-radius:8px;padding:10px;margin-bottom:10px">
-        <label>Search Depth <span class="slider-val" id="mm-depth-val">2</span></label>
-        <input type="range" id="mm-depth" min="1" max="4" step="1" value="2">
+        <label>Search Depth <span class="slider-val" id="mm-depth-val">3</span></label>
+        <input type="range" id="mm-depth" min="1" max="4" step="1" value="3">
         <br><br>
         <label>Candidates (k) <span class="slider-val" id="mm-k-val">5</span></label>
         <input type="range" id="mm-k" min="1" max="10" step="1" value="5">
         <br>
-        <div style="font-size:0.75rem;color:#888;margin-top:6px">~<span id="mm-cost">25</span> forward passes per move</div>
+        <div style="font-size:0.75rem;color:#888;margin-top:6px">~<span id="mm-cost">125</span> forward passes per move</div>
       </div>
       <button id="btn-new">⟳ New Game</button>
     </div>

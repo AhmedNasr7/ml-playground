@@ -152,7 +152,7 @@ def minimax_move(
     board: chess.Board,
     engine: ChessGPTEngine,
     k: int = 5,
-    depth: int = 2,
+    depth: int = 3,
 ) -> str:
     """
     Pick the best move using minimax over GPT-sampled candidates.
