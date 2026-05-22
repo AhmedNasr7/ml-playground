@@ -4,3 +4,10 @@ jupyter
 tensorboard
 loguru
 scipy
+gradio
+streamlit
+streamlit-image-coordinates
+cairosvg
+pillow
+fastapi
+uvicorn[standard]

@@ -88,7 +88,7 @@ def log_epoch_metrics(
         f"Epoch {epoch:>3} | "
         f"tr_loss={train['loss']:.4f}  tr_ppl={train['ppl']:.1f}  tr_top1={train['top1']:.1f}%  |  "
         f"vl_loss={val['loss']:.4f}  vl_ppl={val['ppl']:.1f}  vl_top1={val['top1']:.1f}%  "
-        f"vl_top5={val['top5']:.1f}%  vl_rank={val['rank']:.1f}"
+        f"vl_top5={val['top5']:.1f}%"
     )
 
 
